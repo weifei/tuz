@@ -1,214 +1,9 @@
-#!/usr/bin/env python
-
 import numpy as np
-
 import networkx as nx
-import scipy as sp
-import scipy.linalg as linalg
 from collections import OrderedDict
 import pandas as pd
 from gurobipy import *
 import random
-from genericmatrix import *
-
-eps = 1e-14
-
-# Helper functions
-def numpy_to_generic(npmat):
-    # convert a numpy array into a generatematrix
-    mat = GenericMatrix(npmat.shape, 0, F.unity, F.Add, F.Subtract, F.Multiply, F.Divide)
-    for i in range(npmat.shape[0]):
-        mat.SetRow(i, np.array(npmat[i], dtype=int))
-    return mat
-
-def generic_to_numpy(mat):
-    return np.array(mat.data, dtype=int)
-
-def generate_rc_matrix(in_matrix, out_column_num):
-    #print "in_matrix", in_matrix
-    #print "out edge num", out_column_num
-    #rand_matrix = np.random.random((in_matrix.shape[1], out_column_num))
-    in_matrix_generic = numpy_to_generic(in_matrix)
-    rand_matrix = GenericMatrix((in_matrix.shape[1], out_column_num), 0, F.unity, F.Add, F.Subtract, F.Multiply, F.Divide)
-    for i in range(rand_matrix.rows):
-        rand_matrix.SetRow(i, np.array([F.GetRandomElement() for x in range(out_column_num)], dtype=int))
-
-    #return in_matrix.dot(rand_matrix)
-    result = in_matrix_generic * rand_matrix
-    result = generic_to_numpy(result)
-    return result
-
-def grank(code_matrix, S, T):
-    if T[0]:
-        # H = np.atleast_2d(code_matrix[T[0]].values)
-        # H2 = np.atleast_2d(code_matrix[T[0]].ix[S[1]].values)
-        # rk_H = np.linalg.matrix_rank(H, tol=eps)
-        # rk_H2 = np.linalg.matrix_rank(H2, tol=eps)
-        H = numpy_to_generic(np.atleast_2d(code_matrix[T[0]].values))
-        H2 = numpy_to_generic(np.atleast_2d(code_matrix[T[0]].ix[S[1]].values))
-        rk_H = H.Rank()
-        rk_H2 = H2.Rank()
-    else:
-        rk_H = 0
-        rk_H2 = 0
-
-    if T[0] or T[1]:
-        H2G2 = np.hstack((code_matrix[T[0]].ix[S[1]].values, code_matrix[T[1]].ix[S[1]].values))
-        H2G2 = numpy_to_generic(H2G2)
-        # rk_H2G2 = np.linalg.matrix_rank(H2G2, tol=eps)
-        rk_H2G2 = H2G2.Rank()
-    else:
-        rk_H2G2 = 0
-
-    return rk_H + rk_H2G2 - rk_H2
-
-def check_column_span(a, b):
-    if not b.size:
-        return False
-
-    # check if all columns of a are in the column span of b
-    ab_generic = numpy_to_generic(np.hstack((a,b)))
-    b_generic = numpy_to_generic(b)
-    #print "check span"
-    #print ab_generic.Rank(), b_generic.Rank()
-
-    #if np.linalg.matrix_rank(np.hstack((a, b)), tol=eps) > np.linalg.matrix_rank(b, tol=eps):
-    if ab_generic.Rank() > b_generic.Rank():
-        return False
-    else:
-        return True
-
-def get_null_space(A):
-    u, s, vh = np.linalg.svd(A)
-    n = A.shape[1]   # the number of columns of A
-    if len(s)<n:
-        expanded_s = np.zeros(n, dtype = s.dtype)
-        expanded_s[:len(s)] = s
-        s = expanded_s
-    null_mask = (s <= eps)
-    null_space = np.compress(null_mask, vh, axis=0)
-    return np.transpose(null_space)
-
-def neutralization_condition(code_matrix, U1, U2, I1, I2, B, S):
-    T0 = [U1, U2 + B]
-    T1 = [U1 + I1, U2 + I2 + B]
-    grank0 = grank(code_matrix, S, T0)
-    grank1 = grank(code_matrix, S, T1)
-    #print grank0, grank1
-
-    if grank1 > grank0:
-        pi2 = code_matrix[I1].ix[S[1]].values
-        H2U = code_matrix[U1].ix[S[1]].values
-
-        H2UG2UB = np.hstack((code_matrix[U1].ix[S[1]].values, code_matrix[U2 + B].ix[S[1]].values))
-        #print "edges"
-        #print I1
-        #print U1
-        #print U1 + U2 + B
-        #print numpy_to_generic(H2UG2UB).Rank()
-
-        if (not check_column_span(pi2, H2U)) and (check_column_span(pi2, H2UG2UB)):
-            return True
-    else:
-        return False
-
-def get_neutralized_solution(code_matrix, S, U1, I1, num):
-    # need to identify basis
-    T1 = sorted(set(U1).union(set(I1)))
-    if U1:
-        H2U = code_matrix[U1].ix[S[1]].values
-    else:
-        H2U = np.zeros((len(S[1]), 0))
-
-    #print "I1", I1
-    HI1 = code_matrix[I1].values
-    HI1_generic = numpy_to_generic(HI1)
-    H2I1 = code_matrix[I1].ix[S[1]].values
-    H2 = np.hstack((H2U, H2I1))
-    H2_generic = numpy_to_generic(H2)
-    H2NULL = H2_generic.NullSpace()
-    #print "NULLSPACE", H2NULL
-    Nullsize = H2NULL.Size()
-
-    # truncate the null basis
-    # the last len(I1) rows
-    FBase = H2NULL.SubMatrix(len(U1), len(U1)+len(I1)-1)
-    #print "FBase", FBase
-
-    rand_matrix = GenericMatrix((Nullsize[1], num), 0, F.unity, F.Add, F.Subtract, F.Multiply, F.Divide)
-    for i in range(rand_matrix.rows):
-        rand_matrix.SetRow(i, [F.GetRandomElement() for x in range(num)])
-
-    #print "HI1_generic", HI1_generic
-    result = HI1_generic * FBase * rand_matrix
-    result = generic_to_numpy(result)
-    return result
-
-
-# def get_neutralized_solution(code_matrix, S, U1, I1, num):
-#     # need to identify basis
-#     pi = np.atleast_2d(code_matrix[I1].values)
-#     pi2 = np.atleast_2d(code_matrix[I1].ix[S[1]])
-#
-#     if U1:
-#         HU = code_matrix[U1].values
-#         H2U = code_matrix[U1].ix[S[1]].values
-#         HU_basis = linalg.orth(HU)
-#         H2U_basis = linalg.orth(H2U)
-#     else:
-#         HU = np.zeros((len(S), 0))
-#         H2U = np.zeros((len(S[1]), 0))
-#         HU_basis = np.zeros((len(S[0] + S[1]), 0))
-#         H2U_basis = np.zeros((len(S[1]), 0))
-#
-#
-#     # extend the H2U_basis into a basis for [H2U PI2]
-#     # and figure out candidates for beta
-#     lower_basis = H2U_basis
-#     ul_basis = HU_basis
-#
-#     beta_candidates = []
-#     alphas = []
-#
-#     for i in range(pi2.shape[1]):
-#         low_col = pi2[:,i].reshape(len(S[1]), 1)
-#         if not lower_basis.size or np.linalg.matrix_rank(np.hstack((lower_basis, low_col)), tol=eps) > np.linalg.matrix_rank(lower_basis, tol=eps):
-#             new_col = pi[:,i].reshape(len(S[0] + S[1]), 1)
-#
-#             lower_basis = np.hstack((lower_basis, low_col))
-#             ul_basis = np.hstack((ul_basis, new_col))
-#             alphas.append(i)
-#         else:
-#             beta_candidates.append(i)
-#
-#     betas = []
-#
-#     for i in beta_candidates:
-#         new_col = pi[:,i].reshape(len(S[0] + S[1]), 1)
-#         if not ul_basis.size or np.linalg.matrix_rank(np.hstack((ul_basis, new_col)), tol=eps) > np.linalg.matrix_rank(ul_basis, tol=eps):
-#             ul_basis = np.hstack((ul_basis, new_col))
-#             betas.append(i)
-#
-#     dep_matrix = np.hstack((lower_basis, pi2[:, betas].reshape(len(S[1]), len(betas))))
-#
-#     null_rank = dep_matrix.shape[1] - np.linalg.matrix_rank(dep_matrix, tol=eps)
-#
-#     # find the nullspace of dep_matrix
-#     null_dep_matrix = get_null_space(dep_matrix)
-#
-#     # get random vectors out of this null space
-#     null_coeff_matrix = np.random.random((null_rank, num))
-#     rand_matrix = null_dep_matrix.dot(null_coeff_matrix)
-#
-#     rand_matrix = rand_matrix[-(len(alphas) + len(betas)):, :]
-#
-#     coeff_matrix = np.zeros((len(I1), num))
-#     coeff_matrix[alphas + betas, :] = rand_matrix
-#
-#     coded_matrix = pi.dot(coeff_matrix)
-#
-#     return coded_matrix
-
 
 
 class MUGraph(nx.MultiDiGraph):
@@ -221,7 +16,6 @@ class MUGraph(nx.MultiDiGraph):
         self.neutralized_nodes = {}
         if data != None:
             self.set_indices()
-
 
     def set_sources(self, srcs):
         self.sources = srcs
@@ -498,15 +292,9 @@ class MUGraph(nx.MultiDiGraph):
             # code for O
             # edge by edge coding for neutralization
 
-            #print "O edges: ", O
             while O:
                 # pick a random edge from O
-                #curr_o = random.choice(O)
-                #print "U1: ", U1
-                #print "U2: ", U2
-                #print "I1: ", I1
-                #print "I2: ", I2
-                #print "B: ", B
+                # curr_o = random.choice(O)
                 if neutralization_condition(code_matrix, U1, U2, I1, I2, B, s_edges_idx):
                     curr_o = max(O)
                     # print "neutralize on : ", curr_o
