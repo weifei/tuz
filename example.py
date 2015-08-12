@@ -4,7 +4,7 @@ import os
 import numpy as np
 from networkx.readwrite import json_graph
 import json
-from tuzcc import tuzcc
+import tuzc
 
 def load_graph(case_file):
     G = tuzc.MUGraph()
