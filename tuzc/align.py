@@ -20,7 +20,7 @@ def grank(code_matrix, S, T):
     return rk_H + rk_H2G2 - rk_H2
 
 
-def neutralization_condition(code_matrix, U1, U2, I1, I2, B, S):
+def check_alignment_criterion(code_matrix, U1, U2, I1, I2, B, S):
     T0 = [U1, U2 + B]
     T1 = [U1 + I1, U2 + I2 + B]
     grank0 = grank(code_matrix, S, T0)
@@ -37,7 +37,7 @@ def neutralization_condition(code_matrix, U1, U2, I1, I2, B, S):
     else:
         return False
 
-def get_neutralized_solution(code_matrix, S, U1, I1, num):
+def get_alignment_solution(code_matrix, S, U1, I1, num):
     # need to identify basis
     T1 = sorted(set(U1).union(set(I1)))
     if U1:

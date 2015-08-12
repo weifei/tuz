@@ -1,9 +1,11 @@
 import numpy as np
 import networkx as nx
-from collections import OrderedDict
+import random
+import align
 import pandas as pd
 from gurobipy import *
-import random
+from util import *
+from collections import OrderedDict
 
 
 class MUGraph(nx.MultiDiGraph):
@@ -13,8 +15,11 @@ class MUGraph(nx.MultiDiGraph):
         self.dsts_evolution = None
         self.coding_matrix = None
         self.directed_simple_G = None
-        self.neutralized_nodes = {}
-        if data != None:
+        self.sources = None
+        self.destinations = None
+        self.alignment_nodes = {}
+        self.ordered_edges = None
+        if data is not None:
             self.set_indices()
 
     def set_sources(self, srcs):
@@ -48,7 +53,7 @@ class MUGraph(nx.MultiDiGraph):
         # reset data structures
         self.coding_matrix = None
         self.dsts_evolution = None
-        self.neutralized_nodes = []
+        self.alignment_nodes = []
 
 
     def get_edge_index(self, edge):
@@ -226,7 +231,7 @@ class MUGraph(nx.MultiDiGraph):
         # get the source edges (for now we assume that they equal to the min-cuts)
         s = self.sources
         t = self.destinations
-        self.neutralized_nodes = {}
+        self.alignment_nodes = {}
         dsts_iter = self.dsts_evolution
 
         # get the union set of source edges
@@ -290,21 +295,24 @@ class MUGraph(nx.MultiDiGraph):
 
             # Step 2
             # code for O
-            # edge by edge coding for neutralization
+            # edge by edge coding for alignment
 
             while O:
                 # pick a random edge from O
                 # curr_o = random.choice(O)
-                if neutralization_condition(code_matrix, U1, U2, I1, I2, B, s_edges_idx):
+                if align.check_alignment_criterion(code_matrix, U1, U2, I1,
+                                                   I2, B, s_edges_idx):
                     curr_o = max(O)
-                    # print "neutralize on : ", curr_o
+                    # print "alignment on : ", curr_o
                     temp = self.get_edge_from_index(I[0])
-                    if temp[1] in self.neutralized_nodes:
-                        self.neutralized_nodes[temp[1]].append(curr_o)
+                    if temp[1] in self.alignment_nodes:
+                        self.alignment_nodes[temp[1]].append(curr_o)
                     else:
-                        self.neutralized_nodes[temp[1]] = [curr_o]
-                    # code_matrix[O] = get_neutralized_solution(code_matrix, s_edges_idx, U1, I1, len(O))
-                    code_matrix[curr_o] = get_neutralized_solution(code_matrix, s_edges_idx, U1, I1, 1)
+                        self.alignment_nodes[temp[1]] = [curr_o]
+                    # code_matrix[O] = align.get_alignment_solution(
+                    # code_matrix, s_edges_idx, U1, I1, len(O))
+                    code_matrix[curr_o] = align.get_alignment_solution(
+                        code_matrix, s_edges_idx, U1, I1, 1)
                 else:
                     curr_o = min(O)
                     # print "random coding edges: ", curr_o
@@ -385,7 +393,8 @@ class MUGraph(nx.MultiDiGraph):
         gmats = [H, H2G2, H2]
         grks = [g1, g2, g3]
 
-        summary = "Neutralization happened at nodes: " + str(self.neutralized_nodes) + '\n'
+        summary = "Neutralization happened at nodes: " + \
+                  str(self.alignment_nodes) + '\n'
         summary = summary + "Final Grank = " + str(final_grank) + '\n'
         summary = summary + "Sum Rate bound = " + str(sum_rate_bound) + '\n'
         summary = summary + "Rank H1= " + str(r_H1) + '\n'
