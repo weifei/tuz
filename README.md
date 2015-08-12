@@ -14,4 +14,15 @@ Dependencies
 
 
 Usage
------ 
+-----
+ 
+ 
+Examples
+--------
+
+
+Reference
+---------
+
+0. "Alignment based Network Coding for Two-Unicast-Z Networks", Weifei Zeng, 
+Viveck R. Cadambe, Muriel Medard. https://github.com/weifei/tuzc

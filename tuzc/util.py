@@ -17,9 +17,12 @@ def generic_to_numpy(mat):
 def generate_rc_matrix(in_matrix, out_column_num):
     in_matrix_generic = numpy_to_generic(in_matrix)
     rand_matrix = gmat.GenericMatrix((in_matrix.shape[1], out_column_num), 0,
-                                 F.unity, F.Add, F.Subtract, F.Multiply, F.Divide)
+                                     F.unity, F.Add, F.Subtract,
+                                     F.Multiply, F.Divide)
     for i in range(rand_matrix.rows):
-        rand_matrix.SetRow(i, np.array([F.GetRandomElement() for x in range(out_column_num)], dtype=int))
+        rand_matrix.SetRow(i,
+                           np.array([F.GetRandomElement()
+                        for _ in range(out_column_num)], dtype=int))
 
     #return in_matrix.dot(rand_matrix)
     result = in_matrix_generic * rand_matrix
@@ -36,13 +39,14 @@ def check_column_span(a, b):
     #print "check span"
     #print ab_generic.Rank(), b_generic.Rank()
 
-    #if np.linalg.matrix_rank(np.hstack((a, b)), tol=eps) > np.linalg.matrix_rank(b, tol=eps):
+    #if np.linalg.matrix_rank(np.hstack((a, b)), tol=eps) >
+    # np.linalg.matrix_rank(b, tol=eps):
     if ab_generic.Rank() > b_generic.Rank():
         return False
     else:
         return True
 
-def get_null_space(A):
+def get_null_space(A, eps=1e-7):
     u, s, vh = np.linalg.svd(A)
     n = A.shape[1]   # the number of columns of A
     if len(s)<n:
