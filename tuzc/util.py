@@ -24,7 +24,6 @@ def generate_rc_matrix(in_matrix, out_column_num):
                            np.array([F.GetRandomElement()
                         for _ in range(out_column_num)], dtype=int))
 
-    #return in_matrix.dot(rand_matrix)
     result = in_matrix_generic * rand_matrix
     result = generic_to_numpy(result)
     return result
@@ -36,8 +35,6 @@ def check_column_span(a, b):
     # check if all columns of a are in the column span of b
     ab_generic = numpy_to_generic(np.hstack((a,b)))
     b_generic = numpy_to_generic(b)
-    #print "check span"
-    #print ab_generic.Rank(), b_generic.Rank()
 
     #if np.linalg.matrix_rank(np.hstack((a, b)), tol=eps) >
     # np.linalg.matrix_rank(b, tol=eps):

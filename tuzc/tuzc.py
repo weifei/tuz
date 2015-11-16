@@ -12,11 +12,11 @@ class MUGraph(nx.MultiDiGraph):
 
     def __init__(self, data=None, **attr):
         super(MUGraph, self).__init__(data, **attr)
-        self.dsts_evolution = None
+        self.dst_evolution_rec = None
         self.coding_matrix = None
-        self.directed_simple_G = None
-        self.sources = None
-        self.destinations = None
+        self.base_digraph = None
+        self.sources = []
+        self.destinations = []
         self.alignment_nodes = {}
         self.ordered_edges = None
         if data is not None:
@@ -34,7 +34,7 @@ class MUGraph(nx.MultiDiGraph):
         if not nx.is_connected(self.to_undirected()):
             raise ValueError('The graph is not connected')
 
-        self.directed_simple_G = nx.DiGraph(self)
+        self.base_digraph = nx.DiGraph(self)
         self.ordered_nodes = nx.topological_sort(self)
         for idx, node in enumerate(self.ordered_nodes):
             self.node[node]['index'] = idx
@@ -45,14 +45,14 @@ class MUGraph(nx.MultiDiGraph):
         for tail in self.ordered_nodes:
             for head in sorted(self[tail]):
                 self.ordered_edges[(tail, head)] = index
-                self.directed_simple_G[tail][head]['capacity'] = len(self[tail][head])
+                self.base_digraph[tail][head]['capacity'] = len(self[tail][head])
                 for idx in sorted(self[tail][head]):
                     self[tail][head][idx]['index'] = index
                     index = index + 1
 
         # reset data structures
         self.coding_matrix = None
-        self.dsts_evolution = None
+        self.dst_evolution_rec = None
         self.alignment_nodes = []
 
 
@@ -139,7 +139,7 @@ class MUGraph(nx.MultiDiGraph):
         S = [list(set(self.get_edges_indices(src))) for src in s_edges]
 
         matrices = []
-        for dsts in self.dsts_evolution[::-1]:
+        for dsts in self.dst_evolution_rec[::-1]:
             T = [sorted(x) for x in dsts]
             H2_raw = self.coding_matrix[T[0]].ix[S[1]].values
             G2_raw = self.coding_matrix[T[1]].ix[S[1]].values
@@ -189,7 +189,7 @@ class MUGraph(nx.MultiDiGraph):
         T_curr_idx = [set(self.get_edges_indices(x)) for x in T_curr]
         T_union = set.union(*[set(x) for x in T_curr])
         T_union_idx = set.union(*T_curr_idx)
-        self.dsts_evolution = [T_curr_idx]
+        self.dst_evolution_rec = [T_curr_idx]
 
         while not T_union_idx.issubset(S):
             # get the edges out of the max-ordered node
@@ -210,7 +210,7 @@ class MUGraph(nx.MultiDiGraph):
 
             T_curr = T_next
             T_curr_idx = [set(self.get_edges_indices(x)) for x in T_curr]
-            self.dsts_evolution.append(T_curr_idx)
+            self.dst_evolution_rec.append(T_curr_idx)
 
             T_union = set.union(*[set(x) for x in T_curr])
             T_union_idx = set.union(*T_curr_idx)
@@ -232,7 +232,7 @@ class MUGraph(nx.MultiDiGraph):
         s = self.sources
         t = self.destinations
         self.alignment_nodes = {}
-        dsts_iter = self.dsts_evolution
+        dsts_iter = self.dst_evolution_rec
 
         # get the union set of source edges
         s_edges = [self.out_edges(x) for x in s]
@@ -342,10 +342,10 @@ class MUGraph(nx.MultiDiGraph):
 
     def get_min_cut(self, s, t):
         # get min cut between two nodes
-        return nx.minimum_cut(self.directed_simple_G, s, t)
+        return nx.minimum_cut(self.base_digraph, s, t)
 
     def get_final_grank(self):
-        return self.get_grank(self.dsts_evolution[0])
+        return self.get_grank(self.dst_evolution_rec[0])
 
     def get_grank(self, T):
         s = self.sources
@@ -364,7 +364,7 @@ class MUGraph(nx.MultiDiGraph):
         s_edges = [self.out_edges(x) for x in s]
         s_edges = [list(set(self.get_edges_indices(src))) for src in s_edges]
 
-        t = [list(x) for x in self.dsts_evolution[0]]
+        t = [list(x) for x in self.dst_evolution_rec[0]]
         H2_raw = self.coding_matrix[t[0]].ix[s_edges[1]].values
         G2_raw = self.coding_matrix[t[1]].ix[s_edges[1]].values
 
@@ -574,7 +574,7 @@ class MUGraph(nx.MultiDiGraph):
         """
         # we build the optimization around the casted digraph instead of multidigraph
         # for simplicity
-        G = self.directed_simple_G
+        G = self.base_digraph
         s_1 = self.sources[0]
         s_2 = self.sources[1]
         t_1 = self.destinations[0]
@@ -709,7 +709,7 @@ class MUGraph(nx.MultiDiGraph):
         """
         # we build the optimization around the casted digraph instead of multidigraph
         # for simplicity
-        G = self.directed_simple_G
+        G = self.base_digraph
         s_1 = self.sources[0]
         s_2 = self.sources[1]
         t_1 = self.destinations[0]
@@ -805,7 +805,7 @@ class MUGraph(nx.MultiDiGraph):
             returns: optimal sum rate, rate r1, rate r2
 
         """
-        G = self.directed_simple_G
+        G = self.base_digraph
         s1 = self.sources[0]
         s2 = self.sources[1]
         t1 = self.destinations[0]
